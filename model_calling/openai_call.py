@@ -1,5 +1,13 @@
 from langchain_core.prompts import PromptTemplate
 import openai
+from dotenv import load_dotenv
+import os
+
+# Load API Key
+load_dotenv()
+API_KEY = os.getenv("OPENAI_API_KEY")
+
+openai.api_key = API_KEY
 
 def get_conversation_openai(template, model="gpt-4o-mini", temperature=0.1, max_tokens=None):
 

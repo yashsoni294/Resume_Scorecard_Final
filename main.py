@@ -1,18 +1,12 @@
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
-import os
-import openai
 import io
 import zipfile
-from dotenv import load_dotenv
 from datetime import datetime
 import re
-import psycopg2
 import shutil
 from files_reading import utils
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
 import base64
 import threading
 import os
@@ -21,24 +15,10 @@ from model_calling.openai_call import get_conversation_openai
 from model_calling.async_api_call import run_in_executor, process_resumes_async
 from aws_s3_connect.connect import upload_resume_file, download_from_s3
 from Logging_folder.logger import logger
+from Postgres_connect.pgadmin_connect import pgadmin_connect
 
 # Lock for synchronizing access to the filename generation
 filename_lock = threading.Lock()
-
-# Load API Key
-load_dotenv()
-API_KEY = os.getenv("OPENAI_API_KEY")
-
-openai.api_key = API_KEY
-
-hostname = 'localhost'
-username = 'postgres'
-password = '123456'
-database = 'ResumeDB'
-port_id = 5432
-
-conn = None
-cur = None
 
 app = FastAPI()
 
@@ -72,30 +52,7 @@ async def upload_files(job_description: str, files: list[UploadFile] = File(...)
     # Create the unique directory for the session
     os.makedirs(extract_path, exist_ok=True)
 
-    try:
-        conn = psycopg2.connect(
-        host=hostname,
-        user=username,
-        password=password,
-        dbname=database,
-        port=port_id
-        )
-
-        cur = conn.cursor()
-
-        cur.execute("""
-                CREATE TABLE IF NOT EXISTS resume_table (
-                    unique_id NUMERIC PRIMARY KEY,
-                    resume_name VARCHAR(100) ,
-                    resume_content TEXT ,
-                    resume_key_aspect TEXT ,
-                    score INTEGER
-                )
-            """)
-        conn.commit()
-
-    except (Exception, psycopg2.Error) as error:
-        logger.error("Error while connecting to PostgreSQL: %s", error)
+    conn, cur = pgadmin_connect()
 
     for file in files:
         try:
@@ -214,7 +171,6 @@ async def upload_files(job_description: str, files: list[UploadFile] = File(...)
                         # Now read for text extraction
                         resume_content = utils.read_txt(txt_file)
                         response_data[file_name] = {"content": resume_content}
-                        
                 
                 elif file_extension == "docx":
                     try:
@@ -232,10 +188,7 @@ async def upload_files(job_description: str, files: list[UploadFile] = File(...)
                 
                 else:
                     logger.warning(f"Unsupported file type: {file_extension}")
-                    # response_data[file_name] = {
-                    #     "error": "Unsupported file type. Supported formats: .pdf, .d ocx, .doc, .txt, .zip, .rar"
-                    # }
-                    pass
+
                 # Add file path to the response data
                 response_data[file_name]["file_path"] = f"{unique_id}_{resume_name}"
 
@@ -247,7 +200,6 @@ async def upload_files(job_description: str, files: list[UploadFile] = File(...)
                         "INSERT INTO resume_table(unique_id,resume_name,resume_content) "
                         "VALUES(%s,%s,%s)", (unique_id, resume_name, resume_content)
                         )
-
                 conn.commit()
                 
                 # Clean up the extracted file
