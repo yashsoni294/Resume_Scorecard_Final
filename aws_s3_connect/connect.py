@@ -48,16 +48,16 @@ def upload_to_s3(local_file_path, bucket_name='yash-soni-db', s3_folder='resume_
         logger.info(f"Successfully uploaded {filename} to {bucket_name}/{s3_key}")
         return True
     
-    except FileNotFoundError:
-        logger.error(f"The file {local_file_path} was not found")
+    except FileNotFoundError as e:
+        logger.exception(f"The file {local_file_path} was not found {e}")
         return False
     
-    except NoCredentialsError:
-        logger.error("Credentials not available")
+    except NoCredentialsError as e:
+        logger.exception(f"Credentials not available : {e}")
         return False
     
     except ClientError as e:
-        logger.error(f"An error occurred: {e}")
+        logger.exception(f"An error occurred: {e}")
         return False
 
 def download_from_s3(filename, bucket_name='yash-soni-db', s3_folder='resume_files/', 
@@ -91,7 +91,7 @@ def download_from_s3(filename, bucket_name='yash-soni-db', s3_folder='resume_fil
         return local_file_path
     
     except ClientError as e:
-        logger.error(f"Error downloading {filename}: {e}")
+        logger.exception(f"Error downloading {filename}: {e}")
         return None
 
 
@@ -106,15 +106,21 @@ def upload_resume_file(filename, directory_path='extracted_files'):
     # Construct full file path
     file_path = os.path.join(directory_path, filename)
     
-    # Check if the file exists
-    if not os.path.exists(file_path):
-        logger.error(f"File {filename} not found in {directory_path}")
-        return False
+    try:
+        # Check if the file exists
+        if not os.path.exists(file_path):
+            logger.error(f"File {filename} not found in {directory_path}")
+            return False
+        
+        # Check if it's a file (not a directory)
+        if not os.path.isfile(file_path):
+            logger.error(f"{filename} is not a file")
+            return False
+        
+        # Attempt to upload the file
+        return upload_to_s3(file_path)
     
-    # Check if it's a file (not a directory)
-    if not os.path.isfile(file_path):
-        logger.error(f"{filename} is not a file")
+    except Exception as e:
+        # Catch any exception and log the error
+        logger.exception(f"An error occurred while uploading {filename}: {e}")
         return False
-    
-    # Attempt to upload the file
-    return upload_to_s3(file_path)

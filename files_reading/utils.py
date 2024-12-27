@@ -6,7 +6,6 @@ import os
 import io
 import re
 
-
 def extract_first_two_digit_number(text):
     """
     Extract the first two-digit number from the input text.
@@ -20,9 +19,6 @@ def extract_first_two_digit_number(text):
     # Use regex to find the first two-digit number
     match = re.search(r'\b\d{2}\b', text)
     return match.group() if match else "0"
-
-
-
 
 def clean_text(text):
     # To Remove HTML tags
@@ -101,7 +97,7 @@ def read_doc(file_path: str):
         resume_content = clean_text(text)
         return resume_content, blob_data
     except Exception as e:
-        logger.error(f"Error reading DOC file: {str(e)}")     
+        logger.exception(f"Error reading DOC file: {str(e)}")     
         return f"Error reading DOC file: {str(e)}", None
     finally:
         if word is not None:
@@ -116,66 +112,5 @@ def read_txt(file: io.BytesIO):
         contents = file.read()
         return clean_text(contents.decode("utf-8").strip())
     except Exception as e:
-        logger.error(f"Error processing TXT file: {str(e)}")
+        logger.exception(f"Error processing TXT file: {str(e)}")
         return f"Error processing TXT file: {str(e)}"
-
-
-# def retrieve_resume_blob(unique_id):
-#     conn = None
-#     try:
-#         # Connect to the PostgreSQL server
-#         conn = psycopg2.connect(
-#             host=hostname,
-#             dbname=database,
-#             user=username,
-#             password=password,
-#             port=port_id
-#         )
-
-#         # Create a cursor
-#         cur = conn.cursor()
-
-#         # SQL query to retrieve the BLOB data
-#         cur.execute(
-#             "SELECT unique_id, resume_name, blob_data FROM resume_table WHERE unique_id = %s", 
-#             (unique_id,)
-#         )
-
-#         # Fetch the result
-#         result = cur.fetchone()
-
-#         if result:
-#             unique_id, resume_name, blob_data = result
-            
-#             # Define the output directory (you can modify this path as needed)
-#             output_dir = r"extracted_files"
-            
-#             # Create the directory if it doesn't exist
-#             import os
-#             os.makedirs(output_dir, exist_ok=True)
-
-#             # Full path for the output file
-#             output_path = os.path.join(output_dir, f"{unique_id}_{resume_name}")
-
-#             # Write the BLOB data to a file
-#             with open(output_path, 'wb') as file:
-#                 file.write(blob_data)
-
-#             print(f"Resume retrieved and saved to: {output_path}")
-#             return output_path
-#         else:
-#             print(f"No resume found with unique_id: {unique_id}")
-#             return None
-
-#     except (Exception, psycopg2.DatabaseError) as error:
-#         print(f"Error retrieving resume: {error}")
-#     finally:
-#         if cur is not None:
-#             cur.close()
-#             print('Cursor closed.')
-
-#         if conn is not None:
-#             conn.close()
-#             print('Database connection closed.')
-
-#     return output_path

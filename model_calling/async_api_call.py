@@ -18,7 +18,7 @@ async def async_key_aspect_extractor(filename, data):
         result = await run_in_executor(conversation_resume, {"resume_text": data["content"]})
         return filename, result
     except Exception as e:
-        logger.error(f"Error in key aspect extraction for {filename}: {e}")
+        logger.exception(f"Error in key aspect extraction for {filename}: {e}")
         return filename, None
 
 async def async_resume_scorer(filename, key_aspect, job_description):
@@ -31,7 +31,7 @@ async def async_resume_scorer(filename, key_aspect, job_description):
         })
         return filename, result
     except Exception as e:
-        logger.error(f"Error in scoring for {filename}: {e}")
+        logger.exception(f"Error in scoring for {filename}: {e}")
         return filename, None
 
 async def process_resumes_async(response_data, job_description):
