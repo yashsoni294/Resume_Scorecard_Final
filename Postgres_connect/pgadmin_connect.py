@@ -64,3 +64,29 @@ def pgadmin_connect():
     
     # Return the connection and cursor objects if successful
     return conn, cur
+
+def pgadmin_disconnect(conn, cur):
+    """
+    Closes the cursor and connection to the PostgreSQL database.
+
+    Args:
+        conn: Connection object for the PostgreSQL database.
+        cur: Cursor object for executing queries.
+
+    Returns:
+        None
+    """
+    try:
+        # Close the cursor
+        if cur is not None:
+            cur.close()
+            logger.info("Database cursor closed.")
+
+        # Close the connection
+        if conn is not None:
+            conn.close()
+            logger.info("Database connection closed.")
+
+    except (Exception, psycopg2.Error) as error:
+        # Log the error if an exception occurs while closing the connection
+        logger.exception("Error while disconnecting from PostgreSQL: %s", error)

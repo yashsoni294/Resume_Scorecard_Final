@@ -8,10 +8,16 @@ conversation_resume = get_conversation_openai(TEMPLATES["resume"])
 conversation_score = get_conversation_openai(TEMPLATES["score"])
 
 async def run_in_executor(func, *args, **kwargs):
+    """
+    Run a synchronous function in an executor to make it asynchronous.
+    """
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, func, *args, **kwargs)
 
 async def async_key_aspect_extractor(filename, data):
+    """
+    Asynchronously extract key aspects from the resume content.
+    """
     try:
         logger.info(f"Extracting key aspects for: {filename} - START")
         # Assuming conversation_resume is synchronous
@@ -22,6 +28,9 @@ async def async_key_aspect_extractor(filename, data):
         return filename, None
 
 async def async_resume_scorer(filename, key_aspect, job_description):
+    """
+    Asynchronously score the resume based on key aspects and job description.
+    """
     try:
         logger.info(f"Scoring resume: {filename} - START")
         # Assuming conversation_score is synchronous
@@ -35,6 +44,9 @@ async def async_resume_scorer(filename, key_aspect, job_description):
         return filename, None
 
 async def process_resumes_async(response_data, job_description):
+    """
+    Process resumes asynchronously to extract key aspects and scores.
+    """
     # Create async tasks for key aspect extraction
     key_aspect_tasks = [
         asyncio.create_task(async_key_aspect_extractor(filename, data)) 
