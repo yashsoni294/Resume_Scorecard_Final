@@ -5,17 +5,12 @@ from Logging_folder.logger import logger
 import os
 import io
 import re
-import threading
-from datetime import datetime
-import time
 import zipfile
 from aws_s3_connect.connect import upload_resume_file
 from Postgres_connect.pgadmin_connect import pgadmin_connect, pgadmin_disconnect
 from Postgres_connect.query_insertion import insert_resume_data
 import uuid
 
-# Lock for synchronizing access to the filename generation
-filename_lock = threading.Lock()
 
 def extract_first_two_digit_number(text):
     """
@@ -65,19 +60,23 @@ def read_pdf(file_path):
         Exception: If there are issues reading the PDF file.
     """
     # Create a PDF reader object from the input file
-    with open(file_path, "rb") as pdf_file:
-        pdf_reader = PdfReader(pdf_file)
-        
-        # Initialize an empty string to store extracted text
-        extracted_text = ""
-        
-        # Iterate through each page of the PDF
-        for page in pdf_reader.pages:
-            # Extract text from the current page and append to the result
-            extracted_text += page.extract_text()
-        
-        # Return the extracted text with leading and trailing whitespaces removed
-    return clean_text(extracted_text.strip())
+    try:
+        with open(file_path, "rb") as pdf_file:
+            pdf_reader = PdfReader(pdf_file)
+            
+            # Initialize an empty string to store extracted text
+            extracted_text = ""
+            
+            # Iterate through each page of the PDF
+            for page in pdf_reader.pages:
+                # Extract text from the current page and append to the result
+                extracted_text += page.extract_text()
+            
+            # Return the extracted text with leading and trailing whitespaces removed
+        return clean_text(extracted_text.strip())
+    except Exception as e:
+        logger.exception(f"Error reading PDF file: {str(e)}")
+        return f"Error reading PDF file: {str(e)}"
 
 def read_docx(file_path):
     """Extract text from a DOCX file."""
@@ -90,6 +89,7 @@ def read_docx(file_path):
             return clean_text(extracted_text.strip())
     except Exception as e:
             logger.exception(f"Error reading DOCX file: {str(e)}")
+            return f"Error reading PDF file: {str(e)}"
 
 
 
@@ -99,11 +99,6 @@ def read_doc(file_path: str):
     """
     word = None
     try:
-        # First read the file as binary for blob storage
-        with open(file_path, "rb") as doc_file:
-            data = doc_file.read()
-            blob_data = None
-
         # Now extract text using Word automation
         word = win32com.client.Dispatch("Word.Application")
         word.Visible = False
@@ -111,7 +106,7 @@ def read_doc(file_path: str):
         text = doc.Content.Text
         doc.Close(False)
         resume_content = clean_text(text)
-        return resume_content, blob_data
+        return resume_content
     except Exception as e:
         logger.exception(f"Error reading DOC file: {str(e)}")     
         return f"Error reading DOC file: {str(e)}", None
@@ -156,10 +151,9 @@ async def process_zip_file(file, extract_path):
         # Extract files from the ZIP archive
         file_name_list = z.namelist()
         for original_file_name in file_name_list:
-            # Generate a unique file name for each file in the ZIP
-            with filename_lock:
-                id = str(uuid.uuid4())
-                unique_file_name = f"{id}_{original_file_name}"
+            # Generate a unique file name for each file in the ZIP archive
+            id = str(uuid.uuid4())
+            unique_file_name = f"{id}_{original_file_name}"
             z.extract(original_file_name, extract_path)
             # Rename the extracted file to its unique name
             os.rename(os.path.join(extract_path, original_file_name),
@@ -185,16 +179,12 @@ async def process_zip_file(file, extract_path):
 
         # Process DOCX files
         elif file_name.endswith(".docx"):
-            try:
-                resume_content = read_docx(file_path)
-                zip_response_data[original_name] = {"content": resume_content}
-            except Exception as e:
-                logger.exception(f"Error reading DOCX file: {str(e)}")
-                # zip_response_data[original_name] = {"content": f"Error reading DOCX file: {str(e)}"}
+            resume_content = read_docx(file_path)
+            zip_response_data[original_name] = {"content": resume_content}
 
         # Process DOC files
         elif file_name.endswith(".doc"):
-            resume_content, _ = read_doc(file_path)
+            resume_content = read_doc(file_path)
             zip_response_data[original_name] = {"content": resume_content}
                     
         zip_response_data[original_name]["file_path"] = file_name

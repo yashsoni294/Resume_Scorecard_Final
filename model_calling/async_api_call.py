@@ -9,14 +9,37 @@ conversation_score = get_conversation_openai(TEMPLATES["score"])
 
 async def run_in_executor(func, *args, **kwargs):
     """
-    Run a synchronous function in an executor to make it asynchronous.
+    Run a synchronous function in a separate thread or process, making it asynchronous.
+
+    This utility allows blocking (synchronous) functions to be run in the background, 
+    avoiding the blocking of the event loop in asynchronous applications.
+
+    Args:
+        func (callable): The synchronous function to run in the executor.
+        *args: The positional arguments to pass to the function.
+        **kwargs: The keyword arguments to pass to the function.
+
+    Returns:
+        The result of the function once it completes.
     """
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, func, *args, **kwargs)
 
 async def async_key_aspect_extractor(filename, data):
     """
-    Asynchronously extract key aspects from the resume content.
+    Asynchronously extract key aspects from the resume content using a synchronous function in an executor.
+
+    This function runs the key aspect extraction process for a resume asynchronously to avoid blocking the event loop.
+    It leverages an executor to run a synchronous function (`conversation_resume`) in the background to extract 
+    relevant key features from the provided resume content.
+
+    Args:
+        filename (str): The name of the file being processed.
+        data (dict): A dictionary containing the resume content under the "content" key.
+
+    Returns:
+        tuple: A tuple containing the filename and the extraction result. If extraction is successful, the result 
+               contains the extracted key aspects, otherwise, it returns None in case of an error.
     """
     try:
         logger.info(f"Extracting key aspects for: {filename} - START")
@@ -29,7 +52,20 @@ async def async_key_aspect_extractor(filename, data):
 
 async def async_resume_scorer(filename, key_aspect, job_description):
     """
-    Asynchronously score the resume based on key aspects and job description.
+    Asynchronously score a resume based on its key aspects and a provided job description.
+
+    This function calculates a score for a resume by comparing its key aspects with the provided job description.
+    It uses a synchronous function (`conversation_score`) for scoring, which is run asynchronously in an executor 
+    to avoid blocking the event loop.
+
+    Args:
+        filename (str): The name of the resume file being processed.
+        key_aspect (str): The key aspects extracted from the resume content.
+        job_description (str): The job description text used to compare against the resume's key aspects.
+
+    Returns:
+        tuple: A tuple containing the filename and the result of the scoring. If an error occurs, the result will 
+        be `None`.
     """
     try:
         logger.info(f"Scoring resume: {filename} - START")
@@ -45,7 +81,22 @@ async def async_resume_scorer(filename, key_aspect, job_description):
 
 async def process_resumes_async(response_data, job_description):
     """
-    Process resumes asynchronously to extract key aspects and scores.
+    Asynchronously process resumes to extract key aspects and calculate scores.
+
+    This function performs two key operations asynchronously for each resume in the provided `response_data`:
+    1. **Key Aspect Extraction**: It extracts key features from each resume's content.
+    2. **Scoring**: It calculates a score for each resume based on the extracted key aspects and the provided job description.
+
+    Both operations are performed concurrently using asynchronous tasks to improve efficiency.
+
+    Args:
+        response_data (dict): A dictionary where keys are filenames and values contain resume data (including the content).
+        job_description (str): The job description used to calculate the resume score.
+
+    Returns:
+        dict: The updated `response_data` dictionary with additional fields:
+            - 'key_feature': The extracted key aspects of each resume.
+            - 'score': The calculated score for each resume based on the job description.
     """
     # Create async tasks for key aspect extraction
     key_aspect_tasks = [

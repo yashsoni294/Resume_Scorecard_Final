@@ -6,7 +6,6 @@ import shutil
 from files_reading import utils
 from fastapi.middleware.cors import CORSMiddleware
 import base64
-import threading
 import os
 from templates.templates import TEMPLATES
 from model_calling.openai_call import get_conversation_openai
@@ -19,9 +18,6 @@ from files_reading.utils import process_zip_file, cleanup_file
 
 # Load environment variables from .env file
 load_dotenv()
-
-# Lock for synchronizing access to the filename generation
-filename_lock = threading.Lock()
 
 # Initialize FastAPI application
 app = FastAPI()
@@ -48,12 +44,28 @@ app.add_middleware(
 # Define the endpoint for uploading files and processing resumes
 @app.post("/upload-files/")
 async def upload_files(job_description: str, files: list[UploadFile] = File(...)):
+    """
+    Upload and process multiple files along with a job description. This endpoint:
+    - Accepts a job description and a list of files.
+    - Processes each file based on its type (PDF, TXT, DOCX and DOC.), extracts content, and stores it.
+    - Handles ZIP files by extracting and processing each file within the archive.
+    - Uploads processed files to an S3 bucket and inserts resume data into a database.
+    - Applies job description context to resumes and updates key features and scores in the database.
+    
+    Args:
+        job_description (str): A job description to extract context for resume matching.
+        files (list[UploadFile]): A list of files to be processed, which may include resumes in various formats.
+
+    Returns:
+        dict: A dictionary containing extracted content, file paths, and processing details for each file.
+    """
 
     # Initialize an empty dictionary to store response data
     response_data = {}
 
     # Get conversation context for job description using OpenAI model
     conversation_jd = get_conversation_openai(TEMPLATES["job_description"])
+    # Extract the key features from the job description
     jd_response = conversation_jd({"job_description_text": job_description})
     processed_jd = jd_response
     logger.info("Processing the Job Description...\n")
@@ -71,20 +83,18 @@ async def upload_files(job_description: str, files: list[UploadFile] = File(...)
             # Fallback to file extension if MIME type is not reliable
             file_extension = file.filename.split(".")[-1].lower()
 
-            # Generate a unique file name using a timestamp
-            with filename_lock:
-                id = str(uuid.uuid4())
-                file_name = file.filename
-                unique_filename = f"{id}_{file_name}"
-                file_path = os.path.join(extract_path, unique_filename)
+            # Generate a unique file name using UUID
+            id = str(uuid.uuid4())
+            file_name = file.filename
+            unique_filename = f"{id}_{file_name}"
+            file_path = os.path.join(extract_path, unique_filename)
 
             # Check if the file is a ZIP archive
             if file.content_type == "application/zip" or file_extension == "zip":
-                
+                # Dictionary will be returned of Zip files data
                 zip_response_data = await process_zip_file(file, extract_path) 
-                # Dictionary will be returned of Zip files
-                response_data.update(zip_response_data) 
                 # Adding the Zip files data to the response data
+                response_data.update(zip_response_data) 
 
             # Process non-ZIP files
             else:
@@ -109,7 +119,7 @@ async def upload_files(job_description: str, files: list[UploadFile] = File(...)
                     response_data[file_name] = {"content": resume_content}
                 
                 elif file_extension == "doc":
-                    resume_content, _ = utils.read_doc(file_path)
+                    resume_content = utils.read_doc(file_path)
                     response_data[file_name] = {"content": resume_content}
                 
                 else:
@@ -181,10 +191,5 @@ async def download_file(file_path: str):
         logger.exception(f"Error downloading file: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        # Optional: Clean up the downloaded file
-        if os.path.exists(file_path):
-            try:
-                # Clean up the  directory after Downloading
-                shutil.rmtree('extracted_files/')
-            except Exception as cleanup_error:
-                logger.error(f"Error cleaning up file {file_path}: {cleanup_error}")
+        # Clean up the downloaded file
+        cleanup_file(file_path)
