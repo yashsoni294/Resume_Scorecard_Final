@@ -12,6 +12,7 @@ import zipfile
 from aws_s3_connect.connect import upload_resume_file
 from Postgres_connect.pgadmin_connect import pgadmin_connect, pgadmin_disconnect
 from Postgres_connect.query_insertion import insert_resume_data
+import uuid
 
 # Lock for synchronizing access to the filename generation
 filename_lock = threading.Lock()
@@ -157,26 +158,20 @@ async def process_zip_file(file, extract_path):
         for original_file_name in file_name_list:
             # Generate a unique file name for each file in the ZIP
             with filename_lock:
-                timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
-                time.sleep(0.001)  # Ensure unique timestamp
-                unique_file_name = f"{timestamp}_{original_file_name}"
+                id = str(uuid.uuid4())
+                unique_file_name = f"{id}_{original_file_name}"
             z.extract(original_file_name, extract_path)
             # Rename the extracted file to its unique name
             os.rename(os.path.join(extract_path, original_file_name),
                         os.path.join(extract_path, unique_file_name))
             extracted_files.append(unique_file_name)
 
-    # Initialize a dictionary to store contents of PDF files
-    pdf_contents = {}
-    i = 0
-    for file_name in extracted_files:
-        original_name = file_name_list[i]
-        i += 1
+    # Process each extracted file
+    for index, file_name in enumerate(extracted_files):
+        original_name = file_name_list[index]
         logger.info(f"Reading file: {original_name}")
         file_path = os.path.join(extract_path, file_name)
-        unique_id = re.match(r'^\d+', file_name).group()
-        resume_name = original_name
-        resume_content = None
+        unique_id = re.match(r'^[a-f0-9\-]+', file_name).group()
 
         # Process PDF files
         if file_name.endswith(".pdf"):
@@ -206,9 +201,9 @@ async def process_zip_file(file, extract_path):
                 
         # If resume content is extracted, store it in the database
         if resume_content is not None:
-            insert_resume_data(unique_id, resume_name, resume_content)
+            insert_resume_data(unique_id, original_name, resume_content)
         else:
-            logger.warning(f"Skipping {resume_name} - No content or blob data available")
+            logger.warning(f"Skipping {original_name} - No content or blob data available")
 
         # Upload the processed resume file to S3
         upload_resume_file(filename=file_name, directory_path=extract_path)

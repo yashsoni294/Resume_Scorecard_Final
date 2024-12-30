@@ -1,8 +1,7 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
-from datetime import datetime
-import time
 import re
+import uuid
 import shutil
 from files_reading import utils
 from fastapi.middleware.cors import CORSMiddleware
@@ -60,7 +59,7 @@ async def upload_files(job_description: str, files: list[UploadFile] = File(...)
     logger.info("Processing the Job Description...\n")
 
     # Create a unique directory for each upload session
-    session_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
+    session_id = str(uuid.uuid4())
     extract_path = f"extracted_files_{session_id}"
     
     # Create the unique directory for the session
@@ -74,10 +73,9 @@ async def upload_files(job_description: str, files: list[UploadFile] = File(...)
 
             # Generate a unique file name using a timestamp
             with filename_lock:
-                timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
-                time.sleep(0.001)  # Ensure unique timestamp
+                id = str(uuid.uuid4())
                 file_name = file.filename
-                unique_filename = f"{timestamp}_{file_name}"
+                unique_filename = f"{id}_{file_name}"
                 file_path = os.path.join(extract_path, unique_filename)
 
             # Check if the file is a ZIP archive
@@ -90,10 +88,6 @@ async def upload_files(job_description: str, files: list[UploadFile] = File(...)
 
             # Process non-ZIP files
             else:
-                unique_id = timestamp
-                resume_name = file_name
-                resume_content = None
-
                 # Save individual file to extracted_files directory
                 file_content = await file.read()
                 
@@ -122,14 +116,14 @@ async def upload_files(job_description: str, files: list[UploadFile] = File(...)
                     logger.warning(f"Unsupported file type: {file_extension}")
 
                 # Add file path to the response data
-                response_data[file_name]["file_path"] = f"{unique_id}_{resume_name}"
+                response_data[file_name]["file_path"] = f"{id}_{file_name}"
 
                 # Upload the processed resume file to S3
-                upload_resume_file(filename = f"{unique_id}_{resume_name}", directory_path=extract_path)
+                upload_resume_file(filename = f"{id}_{file_name}", directory_path=extract_path)
                 logger.info(f"Uploaded {file_name} to S3 Bucket")
             
                 # SQL query to insert data into the database.
-                insert_resume_data(unique_id, resume_name, resume_content) 
+                insert_resume_data(id, file_name, resume_content) 
             
                 # Clean up the extracted file
                 cleanup_file(file_path)
@@ -144,13 +138,14 @@ async def upload_files(job_description: str, files: list[UploadFile] = File(...)
     for key, value in response_data.items():
         resume_key_aspect = value["key_feature"]
         score = value["score"]
-        unique_id = re.match(r"^\d{20}", value["file_path"]).group()
+        unique_id = re.match(r'^[a-f0-9\-]+', value["file_path"]).group()
         resume_name = key
 
         update_resume_data(unique_id, resume_key_aspect, score, resume_name)
-        
+
     # Clean up the unique directory after processing
     shutil.rmtree(extract_path)
+
     return response_data
 
 
@@ -189,6 +184,7 @@ async def download_file(file_path: str):
         # Optional: Clean up the downloaded file
         if os.path.exists(file_path):
             try:
-                os.remove(file_path)
+                # Clean up the  directory after Downloading
+                shutil.rmtree('extracted_files/')
             except Exception as cleanup_error:
                 logger.error(f"Error cleaning up file {file_path}: {cleanup_error}")

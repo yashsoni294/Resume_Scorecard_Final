@@ -46,7 +46,7 @@ def pgadmin_connect():
         # SQL query to create the 'resume_table' if it doesn't exist
         cur.execute("""
             CREATE TABLE IF NOT EXISTS resume_table (
-                unique_id NUMERIC PRIMARY KEY,
+                unique_id UUID PRIMARY KEY,
                 resume_name VARCHAR(100),
                 resume_content TEXT,
                 resume_key_aspect TEXT,
