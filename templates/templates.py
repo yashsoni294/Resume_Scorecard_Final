@@ -103,7 +103,10 @@ TEMPLATES = {
 
         """ , 
     "score" : """
-        Your task is to evaluate the alignment between the provided resume and job description by analyzing three critical sections: Candidate Profile, Experience, and Educational Qualifications and Certifications. Based on your evaluation, assign a final score between 0 and 100, reflecting the overall suitability of the candidate for the job. Also remember do not rush to score, take your time while processing.
+        Your task is to evaluate the alignment between the provided resume and job description by analyzing three 
+        critical sections: Candidate Profile, Experience, and Educational Qualifications and Certifications. Based 
+        on your evaluation, assign a final score between 0 and 100, reflecting the overall suitability of the 
+        candidate for the job. Also remember do not rush to score, take your time while processing.
 
         Inputs:
         Resume Text:
@@ -158,6 +161,9 @@ TEMPLATES = {
             Ensure that scoring accounts for both the breadth and depth of alignment between the resume and job description.
             Emphasize evidence-backed qualifications and experience to avoid scoring inflated or unsupported claims.
         Output:
-            Provide the final calculated score as a single whole number (0 – 100) with no additional explanation or text. If you are not able to score the resume then you can give 0 score to the resume.
+            Provide the final calculated score as a single whole number (0 – 100). Also remember do not rush to score, 
+            take your time while processing. Please do not provide any extra information other than the score. Only and 
+            only provide text explanation if you are unable to give score due to any reason. Do not give 0 score if you
+            are unable to give score, just provide the reason.
         """
 }

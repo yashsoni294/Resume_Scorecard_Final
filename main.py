@@ -14,7 +14,7 @@ from aws_s3_connect.connect import upload_resume_file, download_from_s3
 from Logging_folder.logger import logger
 from Postgres_connect.query_insertion import insert_resume_data, update_resume_data
 from dotenv import load_dotenv
-from files_reading.utils import process_zip_file, cleanup_file
+from files_reading.utils import process_zip_file, cleanup_file, job_description_extraction
 
 # Load environment variables from .env file
 load_dotenv()
@@ -44,7 +44,8 @@ app.add_middleware(
 
 # Define the endpoint for uploading files and processing resumes
 @app.post("/upload-files/")
-async def upload_files(job_description: str, files: list[UploadFile] = File(...)):
+async def upload_files(job_description_file: UploadFile = File(...), files: list[UploadFile] = File(...)):
+
     """
     Upload and process multiple files along with a job description. This endpoint:
     - Accepts a job description and a list of files.
@@ -60,6 +61,25 @@ async def upload_files(job_description: str, files: list[UploadFile] = File(...)
     Returns:
         dict: A dictionary containing extracted content, file paths, and processing details for each file.
     """
+        
+    session_id = str(uuid.uuid4())
+    extract_path = f"extracted_files_{session_id}"
+    
+    # Create the unique directory for the session
+    os.makedirs(extract_path, exist_ok=True)
+
+    id = str(uuid.uuid4())
+    file_name = job_description_file.filename
+    unique_filename = f"{id}_{file_name}"
+    file_path = os.path.join(extract_path, unique_filename)
+
+    file_content = await job_description_file.read()
+
+    with open(file_path, "wb") as f:
+        f.write(file_content)
+    job_description = job_description_extraction(file_path)
+   
+    logger.info("Reading done of the Job Description...\n")
 
     # Initialize an empty dictionary to store response data
     response_data = {}
@@ -70,13 +90,6 @@ async def upload_files(job_description: str, files: list[UploadFile] = File(...)
     jd_response = conversation_jd({"job_description_text": job_description})
     processed_jd = jd_response
     logger.info("Processing the Job Description...\n")
-
-    # Create a unique directory for each upload session
-    session_id = str(uuid.uuid4())
-    extract_path = f"extracted_files_{session_id}"
-    
-    # Create the unique directory for the session
-    os.makedirs(extract_path, exist_ok=True)
 
     # Iterate over each file uploaded
     for file in files:
@@ -109,35 +122,26 @@ async def upload_files(job_description: str, files: list[UploadFile] = File(...)
                 # Process based on file type
                 if file_extension == "pdf":
                     resume_content = utils.read_pdf(file_path)
-                    response_data[file_name] = {"content": resume_content}
                 
                 elif file_extension == "txt":
                     resume_content = utils.read_txt(file_path)
-                    response_data[file_name] = {"content": resume_content}
                 
                 elif file_extension == "docx":
                     resume_content = utils.read_docx(file_path)
-                    response_data[file_name] = {"content": resume_content}
                 
                 elif file_extension == "doc":
                     resume_content = utils.read_doc(file_path)
-                    response_data[file_name] = {"content": resume_content}
                 
                 else:
                     logger.warning(f"Unsupported file type: {file_extension}")
-
+                    continue
+                    
                 # Add file path to the response data
-                response_data[file_name]["file_path"] = f"{id}_{file_name}"
-
-                # Upload the processed resume file to S3
-                upload_resume_file(filename = f"{id}_{file_name}", directory_path=extract_path)
-                logger.info(f"Uploaded {file_name} to S3 Bucket")
+                response_data[file_name] = {"content": resume_content}
+                response_data[file_name]["file_path"] = unique_filename
             
                 # SQL query to insert data into the database.
                 insert_resume_data(id, file_name, resume_content) 
-            
-                # Clean up the extracted file
-                cleanup_file(file_path)
 
         except Exception as e:
             logger.exception(f"Error processing file: {str(e)}")
@@ -151,7 +155,14 @@ async def upload_files(job_description: str, files: list[UploadFile] = File(...)
         score = value["score"]
         unique_id = re.match(r'^[a-f0-9\-]+', value["file_path"]).group()
         resume_name = key
-
+        try:
+            if int(value["score"]) >= 70:
+                upload_resume_file(filename = value["file_path"], directory_path=f"extracted_files_{session_id}")
+                logger.info(f"Uploaded {key} to S3 Bucket")
+            elif int(value["score"]) < 70:
+                value["file_path"] = None
+        except Exception as e:
+            value["file_path"] = None
         update_resume_data(unique_id, resume_key_aspect, score, resume_name)
 
     # Clean up the unique directory after processing

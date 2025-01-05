@@ -121,6 +121,6 @@ async def process_resumes_async(response_data, job_description):
     # Update response_data with results
     for filename in response_data.keys():
         response_data[filename]['key_feature'] = utils.clean_text(key_aspects_dict.get(filename, ""))
-        response_data[filename]['score'] = utils.extract_first_two_digit_number(scores_dict.get(filename, ""))
+        response_data[filename]['score'] = scores_dict.get(filename, "")
     
     return response_data

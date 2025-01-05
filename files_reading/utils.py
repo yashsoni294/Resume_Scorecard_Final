@@ -24,7 +24,7 @@ def extract_first_two_digit_number(text):
     """
     # Use regex to find the first two-digit number
     match = re.search(r'\b\d{2}\b', text)
-    return match.group() if match else "0"
+    return match.group() if match else text
 
 def clean_text(text):
     # To Remove HTML tags
@@ -196,11 +196,11 @@ async def process_zip_file(file, extract_path):
             logger.warning(f"Skipping {original_name} - No content or blob data available")
 
         # Upload the processed resume file to S3
-        upload_resume_file(filename=file_name, directory_path=extract_path)
-        logger.info(f"Uploaded {file_name} to S3 Bucket")
+        # upload_resume_file(filename=file_name, directory_path=extract_path)
+        # logger.info(f"Uploaded {file_name} to S3 Bucket")
 
         # Clean up the extracted file
-        cleanup_file(file_path)
+        # cleanup_file(file_path)
 
     # Close the database cursor and connection
     pgadmin_disconnect(conn, cur)
@@ -215,3 +215,20 @@ def cleanup_file(file_path):
             os.remove(file_path)
         except Exception as e:
             logger.exception(f"Error removing temporary file {file_path}: {str(e)}")
+
+def job_description_extraction(file_path):
+    file_extension = file_path.split(".")[-1].lower()
+    if file_extension == "pdf":
+        return read_pdf(file_path)
+                
+    elif file_extension == "txt":
+        return read_txt(file_path)
+                
+    elif file_extension == "docx":
+        return read_docx(file_path)
+                
+    elif file_extension == "doc": 
+        return read_doc(file_path)
+                
+    else:
+        logger.warning(f"Unsupported file type: {file_extension}")
