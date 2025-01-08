@@ -10,12 +10,12 @@ import os
 from templates.templates import TEMPLATES
 from model_calling.openai_call import get_conversation_openai
 from model_calling.async_api_call import run_in_executor, process_resumes_async
-from aws_s3_connect.connect import upload_resume_file, download_from_s3
+from Resume_storage.aws_connect import upload_resume_file, download_from_s3
 from Logging_folder.logger import logger
 from Postgres_connect.query_insertion import insert_resume_data, update_resume_data
 from dotenv import load_dotenv
 from files_reading.utils import process_zip_file, cleanup_file, job_description_extraction
-
+from Resume_storage.do_connect import upload_resume_file_DO
 # Load environment variables from .env file
 load_dotenv()
 
@@ -45,21 +45,22 @@ app.add_middleware(
 # Define the endpoint for uploading files and processing resumes
 @app.post("/upload-files/")
 async def upload_files(job_description_file: UploadFile = File(...), files: list[UploadFile] = File(...)):
-
     """
-    Upload and process multiple files along with a job description. This endpoint:
-    - Accepts a job description and a list of files.
-    - Processes each file based on its type (PDF, TXT, DOCX and DOC.), extracts content, and stores it.
-    - Handles ZIP files by extracting and processing each file within the archive.
-    - Uploads processed files to an S3 bucket and inserts resume data into a database.
-    - Applies job description context to resumes and updates key features and scores in the database.
+    Handles the upload and processing of job description and resume files.
+    
+    This function:
+    - Saves the job description file and extracts key features using OpenAI.
+    - Iterates over uploaded resume files, processing their content based on file type (PDF, TXT, DOCX, DOC).
+    - If a ZIP file is uploaded, extracts and processes its contents.
+    - Stores processed resume data in a database and uploads qualifying resumes to an S3 bucket.
+    - Cleans up temporary files after processing.
     
     Args:
-        job_description (str): A job description to extract context for resume matching.
-        files (list[UploadFile]): A list of files to be processed, which may include resumes in various formats.
-
+    - job_description_file: The uploaded job description file.
+    - files: List of uploaded resume files.
+    
     Returns:
-        dict: A dictionary containing extracted content, file paths, and processing details for each file.
+    - A dictionary containing processed resume data, including key features and scores.
     """
         
     session_id = str(uuid.uuid4())
@@ -136,7 +137,7 @@ async def upload_files(job_description_file: UploadFile = File(...), files: list
                     logger.warning(f"Unsupported file type: {file_extension}")
                     continue
                     
-                # Add file path to the response data
+                # Add file path and content to the response data
                 response_data[file_name] = {"content": resume_content}
                 response_data[file_name]["file_path"] = unique_filename
             
@@ -157,8 +158,10 @@ async def upload_files(job_description_file: UploadFile = File(...), files: list
         resume_name = key
         try:
             if int(value["score"]) >= 70:
-                upload_resume_file(filename = value["file_path"], directory_path=f"extracted_files_{session_id}")
-                logger.info(f"Uploaded {key} to S3 Bucket")
+                # upload_resume_file(filename = value["file_path"], directory_path=f"extracted_files_{session_id}")
+                cdn_url = upload_resume_file_DO(filename = value["file_path"], directory_path=f"extracted_files_{session_id}")
+                value["file_path"] = cdn_url
+                logger.info(f"Uploaded {key} to Digital Ocean File Storage.")
             elif int(value["score"]) < 70:
                 value["file_path"] = None
         except Exception as e:

@@ -6,10 +6,10 @@ import os
 import io
 import re
 import zipfile
-from aws_s3_connect.connect import upload_resume_file
 from Postgres_connect.pgadmin_connect import pgadmin_connect, pgadmin_disconnect
 from Postgres_connect.query_insertion import insert_resume_data
 import uuid
+from tika import parser
 
 
 def extract_first_two_digit_number(text):
@@ -91,31 +91,45 @@ def read_docx(file_path):
             logger.exception(f"Error reading DOCX file: {str(e)}")
             return f"Error reading PDF file: {str(e)}"
 
-
+# def read_doc(file_path: str):
+#     """
+#     Extract text from a DOC file using COM automation (Windows only).
+#     """
+#     word = None
+#     try:
+#         # Now extract text using Word automation
+#         word = win32com.client.Dispatch("Word.Application")
+#         word.Visible = False
+#         doc = word.Documents.Open(os.path.abspath(file_path))
+#         text = doc.Content.Text
+#         doc.Close(False)
+#         resume_content = clean_text(text)
+#         return resume_content
+#     except Exception as e:
+#         logger.exception(f"Error reading DOC file: {str(e)}")     
+#         return f"Error reading DOC file: {str(e)}", None
+#     finally:
+#         if word is not None:
+#             try:
+#                 word.Quit()
+#             except:
+#                 pass  # Ignore errors during Word cleanup
 
 def read_doc(file_path: str):
     """
-    Extract text from a DOC file using COM automation (Windows only).
+    Extract text from a .doc file using Tika.
+    :param file_path: Path to the .doc file.
+    :return: Extracted text or an error message.
     """
-    word = None
     try:
-        # Now extract text using Word automation
-        word = win32com.client.Dispatch("Word.Application")
-        word.Visible = False
-        doc = word.Documents.Open(os.path.abspath(file_path))
-        text = doc.Content.Text
-        doc.Close(False)
-        resume_content = clean_text(text)
-        return resume_content
+        # Parse the file
+        parsed = parser.from_file(file_path)
+        content = parsed.get("content", "No content found")
+        # Return the extracted content
+        return content
     except Exception as e:
-        logger.exception(f"Error reading DOC file: {str(e)}")     
-        return f"Error reading DOC file: {str(e)}", None
-    finally:
-        if word is not None:
-            try:
-                word.Quit()
-            except:
-                pass  # Ignore errors during Word cleanup
+        return f"An error occurred: {str(e)}"
+
 
 def read_txt(file_path):
     """Extract text from a plain text file."""
